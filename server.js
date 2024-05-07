@@ -1,7 +1,47 @@
 import cors from "cors";
 import express from "express";
+import mongoose from "mongoose";
 
-import flowerData from "./data/flowers.json"
+const mongoUrl = process.env.MONGO_URL || "mongodb://localhost/flowershop";
+mongoose.connect(mongoUrl);
+mongoose.Promise = Promise;
+
+const { Schema } = mongoose;
+
+//Schema - the blueprint
+const flowerSchema = new Schema({
+  name: {
+    type: String,
+    required: true,
+  },
+  price: {
+    type: Number,
+    required: true,
+    min: 0,
+  },
+  color: String,
+  inStock: {
+    type: Boolean,
+    default: true,
+  },
+});
+
+const Flower = mongoose.model("Flower", flowerSchema);
+
+//import data
+import flowerData from "./data/flowers.json";
+
+//Seed the databased
+if (process.env.RESET_DATABASE) {
+  const seedDatabase = async () => {
+    await Flower.deleteMany();
+
+    flowerData.forEach((flower) => {
+      new Flower(flower).save();
+    });
+  };
+  seedDatabase();
+}
 
 // Defines the port the app will run on. Defaults to 8080, but can be overridden
 // when starting the server. Example command to overwrite PORT env variable value:
@@ -20,23 +60,40 @@ app.get("/", (req, res) => {
 
 //getting all the flowers
 //http://localhost:8080/flowers
-app.get("/flowers", (req, res) => {
-  res.json(flowerData)
-})
+app.get("/flowers", async (req, res) => {
+  const allFlowers = await Flower.find();
+
+  if (allFlowers.length > 0) {
+    res.json(allFlowers);
+  } else {
+    res.status(404).send("no flower was found");
+  }
+});
+
+app.get("/flowers/in-stock", async (req, res) => {
+  const flowersInStock = await Flower.find({ inStock: true }).exec();
+
+  if (flowersInStock.length > 0) {
+    res.json(flowersInStock);
+  } else {
+    res.status(404).send("no flower was found");
+  }
+});
 
 // geeting one flower based on id
 //http://localhost:8080/flowers/12
 
-app.get("/flowers/:flowerId", (req, res) => {
-  const { flowerId } = req.params
-  const flower = flowerData.find(flower => +flowerId === flower.id)
+app.get("/flowers/:flowerId", async (req, res) => {
+  const { flowerId } = req.params;
 
-  if (flower) {
-    res.json(flower)
+  const flower = await Flower.findById(flowerId).exec();
+
+  if (flower.length > 0) {
+    res.json(flower);
   } else {
-    res.status(404).send('no flower was found')
+    res.status(404).send("no flower was found");
   }
-})
+});
 
 // Start the server
 app.listen(port, () => {
